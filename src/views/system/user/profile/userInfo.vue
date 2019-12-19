@@ -2,9 +2,12 @@
   <el-form ref="form" :model="user" :rules="rules" label-width="80px">
     <el-form-item label="用户昵称" prop="nickName">
       <el-input v-model="user.nickName" />
-    </el-form-item> 
+    </el-form-item>
     <el-form-item label="手机号码" prop="phonenumber">
       <el-input v-model="user.phonenumber" maxlength="11" />
+    </el-form-item>
+    <el-form-item label="银行卡号" prop="cardNumber">
+      <el-input v-model="user.cardNumber" maxlength="11" />
     </el-form-item>
     <el-form-item label="邮箱" prop="email">
       <el-input v-model="user.email" maxlength="50" />
@@ -53,10 +56,19 @@ export default {
             message: "请输入正确的手机号码",
             trigger: "blur"
           }
+        ],
+        cardNumber: [
+          { required: true, message: "银行卡卡号不能为空", trigger: "blur" },
+          {
+            pattern: /^([1-9]{1})(\d{14}|\d{18})$/,
+            message: "请输入正确的银行卡卡号",
+            trigger: "blur"
+          }
         ]
       }
     };
   },
+
   methods: {
     submit() {
       this.$refs["form"].validate(valid => {

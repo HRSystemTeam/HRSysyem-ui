@@ -245,7 +245,11 @@
               </el-radio-group>
             </el-form-item>
           </el-col>
-
+          <el-col :span="12">
+            <el-form-item label="银行卡号" prop="cardNumber">
+              <el-input v-model="form.cardNumber" placeholder="请输入银行卡号" maxlength="20" />
+            </el-form-item>
+          </el-col>
           <el-col :span="12">
             <el-form-item label="岗位">
               <el-select v-model="form.postIds" multiple placeholder="请选择">
@@ -359,6 +363,14 @@ export default {
         ],
         password: [
           { required: true, message: "用户密码不能为空", trigger: "blur" }
+        ],
+        cardNumber: [
+          { required: true, message: "银行卡卡号不能为空", trigger: "blur" },
+          {
+            pattern: /^([1-9]{1})(\d{14}|\d{18})$/,
+            message: "请输入正确的银行卡卡号",
+            trigger: "blur"
+          }
         ],
         email: [
           {
