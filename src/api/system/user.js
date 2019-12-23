@@ -116,3 +116,12 @@ export function uploadAvatar(data) {
     data: data
   })
 }
+
+// 查询用户列表
+export function getListUser(query) {
+  return request({
+    url: '/system/user/getListUser',
+    method: 'get',
+    params: query
+  })
+}

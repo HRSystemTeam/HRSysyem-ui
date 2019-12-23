@@ -35,17 +35,27 @@
               clearable
               size="small"
               style="width: 240px"
-              @keyup.enter.native="handleQuery"
             />
           </el-form-item>
-          <el-form-item v-if="isDistribution" label="发放情况" prop="wageSituation">
-            <el-select v-model="wageSituation" placeholder="请选择">
-              <el-option label="已发放" value="已发放"></el-option>
-              <el-option label="未发放" value="未发放"></el-option>
+          <el-form-item v-if="isDistribution || toSend" prop="userId" label="用户id">
+            <el-input
+              v-model="queryParams.userId"
+              placeholder="请输入用户id"
+              clearable
+              size="small"
+              style="width: 240px"
+            />
+          </el-form-item>
+          <el-form-item v-if="isDistribution && !toSend" label="发放情况" prop="isSend">
+            <el-select v-model="queryParams.isSend" placeholder="请选择">
+              <el-option label="全部" :value="undefined"></el-option>
+              <el-option label="已发放" value="2"></el-option>
+              <el-option label="未发放" value="1"></el-option>
             </el-select>
           </el-form-item>
-          <el-form-item v-if="isDistribution" label="月份查询" prop="searchMonth">
-            <el-select v-model="searchMonth" placeholder="请选择">
+          <el-form-item v-if="isDistribution || toSend" label="月份查询" prop="wagesDate">
+            <el-select v-model="queryParams.wagesDate" placeholder="请选择">
+              <el-option label="全部月份" :value="null"></el-option>
               <el-option v-for="(item,index) in monthList" :label="item" :value="item" :key="index"></el-option>
             </el-select>
           </el-form-item>
@@ -68,31 +78,55 @@
           </el-col>
           <el-col :span="2">
             <el-button
-              type="primary"
+              type="info"
               icon="el-icon-view"
               size="mini"
               @click="toDistribution"
             >{{wagesDM}}
             </el-button>
           </el-col>
+          <el-col :span="2" offset="18">
+            <el-button
+              type="primary"
+              size="mini"
+              @click="toSendWages"
+            >发放工资
+            </el-button>
+          </el-col>
         </el-row>
-        <div v-if="!isDistribution">
+        <div v-if="!isDistribution && !toSend">
           <el-table key="1" v-loading="loading" :data="userList"
                     :row-class-name="tableRowClassName">
             <el-table-column label="用户编号" align="center" prop="userId"/>
             <el-table-column label="用户名称" align="center" prop="userName"/>
             <el-table-column label="用户昵称" align="center" prop="nickName"/>
             <el-table-column label="部门" align="center" prop="dept.deptName"/>
+            <el-table-column label="状态" align="center">
+              <template slot-scope="scope">
+                <span v-if="scope.row.status === '1'">
+                  停用
+                </span>
+                <span v-else>
+                  正常
+                </span>
+              </template>
+            </el-table-column>
+
             <el-table-column label="手机号码" align="center" prop="phonenumber" width="120"/>
             <el-table-column label="银行卡号" align="center" prop="cardNumber" width="200"/>
             <el-table-column label="工资" align="center" width="120">
               <el-table-column align="center" label="基本工资" width="120">
                 <template slot-scope="scope">
-                  <el-input v-if="!showEdit" :value="scope.row.basicWages"/>
+                  <el-input v-if="editKey === scope.row.userId" v-model="scope.row.basicWages"/>
                   <span v-else>{{scope.row.basicWages}}</span>
                 </template>
               </el-table-column>
-              <el-table-column align="center" prop="otherWages" label="其他工资" width="120"></el-table-column>
+              <el-table-column align="center" prop="otherWages" label="其他工资" width="120">
+                <template slot-scope="scope">
+                  <el-input v-if="editKey === scope.row.userId" v-model="scope.row.otherWages"/>
+                  <span v-else>{{scope.row.otherWages}}</span>
+                </template>
+              </el-table-column>
             </el-table-column>
             <el-table-column
               label="操作"
@@ -102,7 +136,7 @@
             >
               <template slot-scope="scope">
                 <el-button
-                  v-if="showEdit"
+                  v-if="showEdit || editKey !== scope.row.userId"
                   size="mini"
                   type="text"
                   icon="el-icon-edit"
@@ -111,23 +145,21 @@
                 >修改
                 </el-button>
                 <el-button
-                  v-if="!showEdit"
+                  v-if="!showEdit && editKey === scope.row.userId"
                   size="mini"
-                  title="保存"
                   type="text"
-                  icon="el-icon-check"
+                  icon="el-icon-success"
                   @click="handleSave(scope.row)"
-                  v-hasPermi="['system:user:save']"
+                  v-hasPermi="['system:user:edit']"
                 >
                 </el-button>
                 <el-button
-                  v-if="!showEdit"
+                  v-if="!showEdit && editKey === scope.row.userId"
                   size="mini"
-                  title="取消"
                   type="text"
-                  icon="el-icon-close"
+                  icon="el-icon-error"
                   @click="handleCancel(scope.row)"
-                  v-hasPermi="['system:user:cancel']"
+                  v-hasPermi="['system:user:edit']"
                 >
                 </el-button>
               </template>
@@ -141,29 +173,66 @@
             @pagination="getList"
           />
         </div>
-        <div v-if="isDistribution">
-          <el-table key="2" v-loading="loading" :data="userList" @selection-change="handleSelectionChange"
+        <div v-if="isDistribution && !toSend">
+          <el-table key="2" v-loading="loading" :data="wagesList" @selection-change="handleSelectionChange"
                     :row-class-name="tableRowClassName">
-            <el-table-column type="selection" width="40" align="center"/>
-            <el-table-column label="用户编号" align="center" prop="userId"/>
+            <el-table-column type="selection" :selectable='checkboxT' width="40" align="center"/>
+            <el-table-column label="发放记录id" align="center" prop="recordId"/>
+            <el-table-column label="用户id" align="center" prop="userId"/>
             <el-table-column label="用户名称" align="center" prop="userName"/>
-            <el-table-column label="用户昵称" align="center" prop="nickName"/>
-            <el-table-column label="部门" align="center" prop="dept.deptName"/>
-            <el-table-column label="手机号码" align="center" prop="phonenumber" width="120"/>
-            <el-table-column label="银行卡号" align="center" prop="cardNumber" width="200"/>
-            <el-table-column label="工资" align="center" width="120">
-              <el-table-column align="center" prop="basicWages" label="基本工资" width="120"></el-table-column>
-              <el-table-column align="center" prop="otherWages" label="其他工资" width="120"></el-table-column>
+            <el-table-column label="发放金额" align="center" prop="totalWages"/>
+            <el-table-column label="银行卡卡号" width="200" align="center" prop="cardNumber"/>
+            <el-table-column label="工资日期" align="center" prop="wagesDate"/>
+            <el-table-column label="发放日期" align="center" prop="releaseDate"/>
+
+            <el-table-column label="是否发放" align="center">
+              <template slot-scope="scope">
+                <span v-if="scope.row.isSend === 1">未发放</span>
+                <span v-else>已发放</span>
+              </template>
             </el-table-column>
-            <el-table-column label="日期" align="center" prop="date"/>
-            <el-table-column label="发放情况" align="center" prop="grant"/>
           </el-table>
+          <el-button v-if="ids.length>0" @click="sendWages" style="float: left;margin-top: 20px" type="danger"><i
+            class="el-icon-warning"></i>一键发放已选择
+          </el-button>
           <pagination
-            v-show="total>0"
-            :total="total"
+            style="float: right"
+            v-show="total2>0"
+            :total="total2"
             :page.sync="queryParams.pageNum"
             :limit.sync="queryParams.pageSize"
-            @pagination="getList"
+            @pagination="getListWages"
+          />
+        </div>
+        <div v-if="toSend">
+          <el-table key="3" v-loading="loading" :data="wagesList" @selection-change="handleSelectionChange"
+                    :row-class-name="tableRowClassName">
+            <el-table-column type="selection" :selectable='checkboxT' width="40" align="center"/>
+            <el-table-column label="发放记录id" align="center" prop="recordId"/>
+            <el-table-column label="用户id" align="center" prop="userId"/>
+            <el-table-column label="用户名称" align="center" prop="userName"/>
+            <el-table-column label="发放金额" align="center" prop="totalWages"/>
+            <el-table-column label="银行卡卡号" align="center" width="200" prop="cardNumber"/>
+            <el-table-column label="日期" align="center" prop="wagesDate"/>
+            <el-table-column label="发放状态" align="center">
+              <span>没发放</span>
+            </el-table-column>
+            <el-table-column label="操作" align="center">
+              <template slot-scope="scope">
+                <a style="color: blue" @click="sendOneWages(scope.row.recordId)">下发工资</a>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-button v-if="ids.length>0" @click="sendWages" style="float: left;margin-top: 20px" type="danger"><i
+            class="el-icon-warning"></i>一键发放已选择
+          </el-button>
+          <pagination
+            style="float: right"
+            v-show="total2>0"
+            :total="total2"
+            :page.sync="queryParams.pageNum"
+            :limit.sync="queryParams.pageSize"
+            @pagination="getListWages"
           />
         </div>
       </el-col>
@@ -185,25 +254,32 @@
     updateUser,
     exportUser,
     resetUserPwd,
-    changeUserStatus
+    changeUserStatus,
+    getListUser
   } from '@/api/system/user'
   import { treeselect } from '@/api/system/dept'
   import { listPost } from '@/api/system/post'
   import { listRole } from '@/api/system/role'
+  import { listWages, monthList, sendWagesByIds, wagesEdit,getListWages } from '@/api/schedule/wages'
   import Treeselect from '@riophae/vue-treeselect'
   import '@riophae/vue-treeselect/dist/vue-treeselect.css'
+  import {jsonExport} from '../../../utils/exportExcel'
 
   export default {
     components: { Treeselect },
     data() {
       return {
+        total2:0,
+        editKey: undefined,
+        toSend: false,
+        wagesList: [],
         //月份情况
         monthList: [],
         //工资情况
         wageSituation: '',
         //显示工资发放情况
         isDistribution: false,
-        wagesDM: '工资发放情况',
+        wagesDM: '工资发放记录',
         //是否点击修改
         showEdit: true,
         //总金额
@@ -251,9 +327,10 @@
         queryParams: {
           pageNum: 1,
           pageSize: 10,
+          userId: undefined,
           userName: undefined,
-          wageSituation: undefined,
-          searchMonth: undefined
+          isSend: undefined,
+          wagesDate: undefined
         },
         // 表单校验
         rules: {
@@ -304,19 +381,87 @@
       this.getConfigKey('sys.user.initPassword').then(response => {
         this.initPassword = response.data
       })
+      monthList().then(res => {
+        this.monthList = res.data
+      })
     },
     methods: {
-
+      //单个工资发放
+      sendOneWages(index) {
+        sendWagesByIds([index]).then(res => {
+          this.$notify({
+            title: '工资发放成功，发放记录分别为',
+            message: [index],
+            type: 'success'
+          })
+          this.getListWages()
+        })
+      },
+      //跳转到工资table
+      toSendWages() {
+        this.toSend = true
+        this.queryParams.isSend = 1
+        this.getListWages()
+      },
+      //批量发放工资
+      sendWages() {
+        sendWagesByIds([...this.ids]).then(res => {
+          this.$notify({
+            title: '工资发放成功，发放记录分别为',
+            message: [...this.ids],
+            type: 'success'
+          })
+          this.getListWages()
+        })
+      },
+      //判断多选框是否可选
+      checkboxT(row) {
+        if (row.isSend === 1) {
+          return true
+        }
+        return false
+      },
+      //获取工资记录，包括没有发放的
+      getListWages() {
+        this.loading = true
+        listWages(this.addDateRange(this.queryParams, this.dateRange)).then(res => {
+          this.total2 = res.total
+          this.wagesList = res.rows
+          this.loading = false
+        })
+      },
+      //员工工资情况和工资发放记录切换
       toDistribution() {
+        this.total = 0
+        this.toSend = false
+        this.resetQuery()
+        this.queryParams.deptId = ''
+        this.queryParams.isSend = undefined
         if (this.isDistribution) {
           this.isDistribution = false
-          this.wagesDM = '工资发放情况'
+          this.wagesDM = '工资发放记录'
+          this.getList()
         } else {
+          this.getListWages()
           this.isDistribution = true
           this.wagesDM = '工资情况'
         }
       },
+      /** 搜索按钮操作 */
+      handleQuery() {
+        if (this.toSend) {
+          this.queryParams.page = 1
+          this.getListWages()
+        } else if (this.isDistribution) {
+          this.queryParams.page = 1
+          this.getListWages()
+        } else {
+          this.queryParams.page = 1
+          this.getList()
+        }
 
+      },
+      //table表格样式
       tableRowClassName({ row, rowIndex }) {
         if (rowIndex % 2 === 0) {
           return 'success-row'
@@ -329,7 +474,6 @@
         this.loading = true
         listUser(this.addDateRange(this.queryParams, this.dateRange)).then(response => {
             this.userList = response.rows
-            window.console.log(this.userList)
             this.total = response.total
             this.loading = false
           }
@@ -349,7 +493,13 @@
       // 节点单击事件
       handleNodeClick(data) {
         this.queryParams.deptId = data.id
-        this.getList()
+        if (this.isDistribution) {
+          this.queryParams.page = 1
+          this.getListWages()
+        } else {
+          this.queryParams.page = 1
+          this.getList()
+        }
       },
       /** 查询岗位列表 */
       getPosts() {
@@ -401,11 +551,7 @@
         }
         this.resetForm('form')
       },
-      /** 搜索按钮操作 */
-      handleQuery() {
-        this.queryParams.page = 1
-        this.getList()
-      },
+
       /** 重置按钮操作 */
       resetQuery() {
         this.dateRange = []
@@ -414,7 +560,7 @@
       },
       // 多选框选中数据
       handleSelectionChange(selection) {
-        this.ids = selection.map(item => item.userId)
+        this.ids = selection.map(item => item.recordId)
         this.single = selection.length != 1
         this.multiple = !selection.length
       },
@@ -430,18 +576,25 @@
       },
       /** 修改按钮操作 */
       handleUpdate(row) {
-
+        this.editKey = row.userId
         this.showEdit = false
       },
       handleSave(row) {
-        this.showEdit = true
+        window.console.log(row)
+        wagesEdit(row).then(res => {
+          this.$notify({
+            title: res.msg,
+            type: 'success'
+          })
+          this.editKey = undefined
+          this.showEdit = true
+        })
 
-        alert('save')
       },
-      handleCancel(row) {
+      //取消按钮
+      handleCancel() {
+        this.editKey = undefined
         this.showEdit = true
-
-        alert('cancel')
       },
       /** 重置密码按钮操作 */
       handleResetPwd(row) {
@@ -504,17 +657,17 @@
       },
       /** 导出按钮操作 */
       handleExport() {
-        const queryParams = this.queryParams
-        this.$confirm('是否确认导出所有用户数据项?', '警告', {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }).then(function() {
-          return exportUser(queryParams)
-        }).then(response => {
-          this.download(response.msg)
-        }).catch(function() {
-        })
+        if (!this.isDistribution && !this.toSend){
+          getListUser(this.addDateRange(this.queryParams, this.dateRange)).then(response => {
+              jsonExport(response.data,"xls","员工列表"+new Date());
+            }
+          )
+        }
+        else{
+          getListWages(this.addDateRange(this.queryParams, this.dateRange)).then(res => {
+            jsonExport(res.data,"xls","工资发放记录"+new Date());
+          })
+        }
       }
     }
   }
