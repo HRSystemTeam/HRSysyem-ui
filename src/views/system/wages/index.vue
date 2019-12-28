@@ -37,7 +37,7 @@
               style="width: 240px"
             />
           </el-form-item>
-          <el-form-item v-if="isDistribution || toSend" prop="userId" label="用户id">
+          <el-form-item v-if="isDistribution !== 1" prop="userId" label="用户id">
             <el-input
               v-model="queryParams.userId"
               placeholder="请输入用户id"
@@ -46,14 +46,14 @@
               style="width: 240px"
             />
           </el-form-item>
-          <el-form-item v-if="isDistribution && !toSend" label="发放情况" prop="isSend">
+          <el-form-item v-if="isDistribution === 2" label="发放情况" prop="isSend">
             <el-select v-model="queryParams.isSend" placeholder="请选择">
               <el-option label="全部" :value="undefined"></el-option>
               <el-option label="已发放" value="2"></el-option>
               <el-option label="未发放" value="1"></el-option>
             </el-select>
           </el-form-item>
-          <el-form-item v-if="isDistribution || toSend" label="月份查询" prop="wagesDate">
+          <el-form-item v-if="isDistribution !== 1" label="月份查询" prop="wagesDate">
             <el-select v-model="queryParams.wagesDate" placeholder="请选择">
               <el-option label="全部月份" :value="null"></el-option>
               <el-option v-for="(item,index) in monthList" :label="item" :value="item" :key="index"></el-option>
@@ -66,35 +66,37 @@
         </el-form>
 
         <el-row :gutter="10" class="mb8">
-          <el-col :span="1.5">
             <el-button
-              type="warning"
+              style="margin-left: 10px"
+              type="warning "
               icon="el-icon-download"
               size="mini"
               @click="handleExport"
               v-hasPermi="['system:user:export']"
             >导出
             </el-button>
-          </el-col>
-          <el-col :span="2">
+            <el-button
+              type="primary"
+              icon="el-icon-view"
+              size="mini"
+              @click="toTable(1)"
+            >工资情况
+            </el-button>
             <el-button
               type="info"
               icon="el-icon-view"
               size="mini"
-              @click="toDistribution"
-            >{{wagesDM}}
+              @click="toTable(2)"
+            >工资发放记录
             </el-button>
-          </el-col>
-          <el-col :span="2" offset="18">
             <el-button
               type="primary"
               size="mini"
-              @click="toSendWages"
+              @click="toTable(3)"
             >发放工资
             </el-button>
-          </el-col>
         </el-row>
-        <div v-if="!isDistribution && !toSend">
+        <div v-if="isDistribution === 1">
           <el-table key="1" v-loading="loading" :data="userList"
                     :row-class-name="tableRowClassName">
             <el-table-column label="用户编号" align="center" prop="userId"/>
@@ -173,7 +175,7 @@
             @pagination="getList"
           />
         </div>
-        <div v-if="isDistribution && !toSend">
+        <div v-if="isDistribution === 2">
           <el-table key="2" v-loading="loading" :data="wagesList" @selection-change="handleSelectionChange"
                     :row-class-name="tableRowClassName">
             <el-table-column type="selection" :selectable='checkboxT' width="40" align="center"/>
@@ -204,7 +206,7 @@
             @pagination="getListWages"
           />
         </div>
-        <div v-if="toSend">
+        <div v-if="isDistribution === 3">
           <el-table key="3" v-loading="loading" :data="wagesList" @selection-change="handleSelectionChange"
                     :row-class-name="tableRowClassName">
             <el-table-column type="selection" :selectable='checkboxT' width="40" align="center"/>
@@ -278,7 +280,7 @@
         //工资情况
         wageSituation: '',
         //显示工资发放情况
-        isDistribution: false,
+        isDistribution: 1,
         wagesDM: '工资发放记录',
         //是否点击修改
         showEdit: true,
@@ -371,6 +373,7 @@
     },
     created() {
       this.getList()
+      this.getListWages();
       this.getTreeselect()
       this.getDicts('sys_normal_disable').then(response => {
         this.statusOptions = response.data
@@ -387,6 +390,18 @@
     },
     methods: {
       //单个工资发放
+      toTable(id){
+        // this.resetQuery();
+        this.isDistribution = id;
+        if (id === 1){
+          this.getList()
+        }else if (id === 2){
+          this.getListWages()
+        }else {
+          this.queryParams.isSend = 1
+          this.getListWages()
+        }
+      },
       sendOneWages(index) {
         sendWagesByIds([index]).then(res => {
           this.$notify({
@@ -397,12 +412,7 @@
           this.getListWages()
         })
       },
-      //跳转到工资table
-      toSendWages() {
-        this.toSend = true
-        this.queryParams.isSend = 1
-        this.getListWages()
-      },
+
       //批量发放工资
       sendWages() {
         sendWagesByIds([...this.ids]).then(res => {
@@ -430,29 +440,12 @@
           this.loading = false
         })
       },
-      //员工工资情况和工资发放记录切换
-      toDistribution() {
-        this.total = 0
-        this.toSend = false
-        this.resetQuery()
-        this.queryParams.deptId = ''
-        this.queryParams.isSend = undefined
-        if (this.isDistribution) {
-          this.isDistribution = false
-          this.wagesDM = '工资发放记录'
-          this.getList()
-        } else {
-          this.getListWages()
-          this.isDistribution = true
-          this.wagesDM = '工资情况'
-        }
-      },
       /** 搜索按钮操作 */
       handleQuery() {
-        if (this.toSend) {
+        if (this.isDistribution === 3) {
           this.queryParams.page = 1
           this.getListWages()
-        } else if (this.isDistribution) {
+        } else if (this.isDistribution === 2) {
           this.queryParams.page = 1
           this.getListWages()
         } else {
@@ -493,7 +486,7 @@
       // 节点单击事件
       handleNodeClick(data) {
         this.queryParams.deptId = data.id
-        if (this.isDistribution) {
+        if (this.isDistribution !== 1) {
           this.queryParams.page = 1
           this.getListWages()
         } else {
@@ -657,7 +650,7 @@
       },
       /** 导出按钮操作 */
       handleExport() {
-        if (!this.isDistribution && !this.toSend){
+        if (this.isDistribution === 1){
           getListUser(this.addDateRange(this.queryParams, this.dateRange)).then(response => {
               jsonExport(response.data,"xls","员工列表"+new Date());
             }
