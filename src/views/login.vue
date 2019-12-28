@@ -54,7 +54,7 @@
 </template>
 
 <script>
-import { getCodeImg } from "@/api/login";
+    import request from '@/utils/request'
 import Cookies from "js-cookie";
 
 export default {
@@ -97,7 +97,11 @@ export default {
   },
   methods: {
     getCode() {
-      getCodeImg().then(res => {
+        request({
+            url: '/captchaImage',
+            method: 'get'
+        }).then(res => {
+          console.log(res);
         this.codeUrl = "data:image/gif;base64," + res.img;
         this.loginForm.uuid = res.uuid;
       });
