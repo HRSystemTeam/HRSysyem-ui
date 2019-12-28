@@ -7,7 +7,7 @@
       <el-input v-model="user.phonenumber" maxlength="11" />
     </el-form-item>
     <el-form-item label="银行卡号" prop="cardNumber">
-      <el-input v-model="user.cardNumber" maxlength="11" />
+      <el-input v-model="user.cardNumber" maxlength="20" />
     </el-form-item>
     <el-form-item label="邮箱" prop="email">
       <el-input v-model="user.email" maxlength="50" />
